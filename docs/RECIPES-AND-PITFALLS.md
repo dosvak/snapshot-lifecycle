@@ -136,6 +136,18 @@ snapshot_promote, coach_a11y, rest_recorder): get_topic('howto-kit-tools').
 * Two `pc_import.py` runs at the same time on one console work (separate browser sessions) but double the wizard time; the queue runner
   serialises them.
 
+* **Never write `tw.local` in a coach event expression** (button click, table row selection, modal primary button, Service Call
+  result): the browser has no `tw` object, so the button throws `ReferenceError: tw is not defined` and does nothing - on every version.
+  Pass the service input instead: `${SvcAssign}.execute({taskIds: ids.join(","), toUser: ${AssignUser}.getText(), toGroup: ""})`;
+  values from control getters (`getText()`, `getSelectedRecords()`), values of an earlier service result through a hidden Output Text
+  set in that service's On result (`result` is the output). twxkit refuses `tw.local / tw.env / tw.system / tw.object` in any `event*`
+  option at build time. Found in nine served kit apps whose write buttons had only been proven over REST; fixed in SLA Deadline Monitor
+  1.1.1, Team Workload Balancer, Process Smoke Test Runner, Orphan Zombie Cleaner, Deployment Runbook Generator, Role Inbox, Event
+  Manager Monitor, Notification Manager and Business Data Search 1.0.1. The `execute(input)` pattern is verified in the browser on
+  CP4BA 24.0.1 and 8.6.2 (Team Workload Balancer: person row, reassignment through the modal and return to the team, task owner
+  checked over REST); the other fixed apps build under the guard and play back without JavaScript errors - their write buttons have
+  not been driven end to end yet.
+
 ## Verification summary
 
 Every app was imported on the lab, every flow run over REST with `kit_flow_test.py` (real data: tasks reassigned and returned,
@@ -144,3 +156,17 @@ instances started / terminated / deleted, e-mails delivered to an SMTP sink) and
 20.0.0.1 lab. Runtime facts learnt on the way: the task search index lags a few seconds behind an assignment; instances started from
 the designer run on the unnamed tip, which `GET /processApps` never lists; `PUT /process/bulk` answers 200 for terminate and delete of
 a completed instance; `GET /searches/tasks` lists shared definitions of every owner.
+
+## CP4BA 24 (verified on CP4BA 24.0.1 Workflow Authoring and a connected Process Server)
+
+* Build for the Cloud Pak: `TWXKIT_TARGET=cp4ba TWXKIT_MEMBERS=<ldap users> KITENV_restAuthUser=<ldap user> KITENV_restAuthPassword=...
+  python3 build_<app>.py --snapshot <v>` (System Data `8.6.0.0_TC`, serverBaseURL `https://localhost:9443/bas`); the served
+  `-CP4BA.twx` packages are built that way with placeholder credentials. All sixteen kit packages import on the Studio with 0
+  `assetsValidation` errors.
+* Every kit dashboard was played back on the Studio (header from the Init flow, every tab, every non-writing button with its status line -
+  `kit_smoke.py`): tasks, instances, teams, exposed items, saved searches, `/ops` containers / snapshots / environment variables, event
+  manager tasks and the product database queries (`kitSql` through the engine datasource) all answer through the `/bas` loopback.
+* Process Server: the snapshot created on the Studio after the import (`designer_snapshot.py`, the imported one renders unstyled) was
+  installed on the Process Server, `serverBaseURL` set to `https://localhost:9443/baw-<instance>` with
+  `POST /ops/std/bpm/containers/<acr>/versions/<v>/env_vars {"pairs": [...]}` (live), and the same smoke test passed there for all
+  sixteen apps (two old builds still showed the event-expression error fixed above).
